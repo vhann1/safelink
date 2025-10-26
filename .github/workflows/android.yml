@@ -7,32 +7,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 🧩 Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ⚙️ Step 2: Setup Java (use JDK 21 for Android Gradle Plugin 8+)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '21'   # ✅ Use Java 21 for latest Android Gradle Plugin
+          java-version: '21'
           distribution: 'temurin'
+          cache: 'gradle'
 
+      # ⚡ Step 3: Setup Node.js (Capacitor CLI requires Node >=20)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
+      # 📦 Step 4: Install dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
+      # 🧹 Step 5: Clean Android build cache (avoid old plugin issues)
+      - name: Clean Gradle cache
+        working-directory: android
+        run: ./gradlew clean || true
+
+      # 🔄 Step 6: Sync Capacitor
       - name: Sync Capacitor
-        run: node ./node_modules/@capacitor/cli/bin/capacitor sync
+        run: npx cap sync android
 
-      - name: Build APK
+      # 🏗️ Step 7: Build APK
+      - name: Build Debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
+      # 📤 Step 8: Upload APK artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
