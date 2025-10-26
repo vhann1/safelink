@@ -13,25 +13,19 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'  # ✅ Updated for Android Gradle Plugin compatibility
+          java-version: '21'   # ✅ Use Java 21 for latest Android Gradle Plugin
           distribution: 'temurin'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # ✅ Capacitor v6+ requires Node 20+
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install
 
       - name: Sync Capacitor
         run: node ./node_modules/@capacitor/cli/bin/capacitor sync
-
-      - name: Debug directory
-        run: |
-          pwd
-          ls -la
-          ls -la android
 
       - name: Build APK
         working-directory: android
