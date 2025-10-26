@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SafeLink</string>
+    <string name="title_activity_main">SafeLink</string>
+    <string name="package_name">com.safelink.app</string>
+    <string name="custom_url_scheme">com.safelink.app</string>
+</resources>

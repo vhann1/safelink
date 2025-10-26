@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SafeLink</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <!-- Add AFTER firebase-config.js -->
+<script src="https://unpkg.com/@capacitor/core/dist/capacitor.js"></script>
+<script src="js/background-tracker.js"></script>
+    <!-- PWA Meta Tags -->
+<meta name="application-name" content="SafeLink">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SafeLink">
+<meta name="description" content="Real-time location tracking and geofencing alerts">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="msapplication-TileColor" content="#3B82F6">
+<meta name="msapplication-tap-highlight" content="no">
+<meta name="theme-color" content="#3B82F6">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Favicon (using emoji as fallback) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+
+<!-- Service Worker Registration -->
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    });
+  }
+</script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card card">
+            <div class="logo">🛡️ SafeLink</div>
+            <div class="logo-subtitle">Geofencing Alert System</div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email</label>
+                    <input type="email" class="form-input" id="email" placeholder="Enter your email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" class="form-input" id="password" placeholder="Enter your password" required>
+                </div>
+                
+                <button type="submit" class="btn" id="loginBtn">
+                    <span id="loginText">Login</span>
+                    <span id="loginSpinner" class="loading hidden"></span>
+                </button>
+            </form>
+            
+            <div id="message" class="alert hidden" style="margin-top: 1rem;"></div>
+            
+            <div style="margin-top: 2rem; text-align: center;">
+                <p>Don't have an account? <a href="register.html" class="link">Register here</a></p>
+                <p><a href="track.html" class="link">Share Location</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginText = document.getElementById('loginText');
+            const loginSpinner = document.getElementById('loginSpinner');
+            const messageDiv = document.getElementById('message');
+            
+            // Show loading state
+            loginText.textContent = 'Logging in...';
+            loginSpinner.classList.remove('hidden');
+            loginBtn.disabled = true;
+            messageDiv.classList.add('hidden');
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Update user last login
+                await db.collection('users').doc(user.uid).update({
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Redirect to dashboard
+                window.location.href = 'index.html';
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                messageDiv.textContent = getErrorMessage(error.code);
+                messageDiv.classList.remove('hidden');
+                messageDiv.style.background = '#fee2e2';
+                messageDiv.style.color = '#991b1b';
+            } finally {
+                // Reset button state
+                loginText.textContent = 'Login';
+                loginSpinner.classList.add('hidden');
+                loginBtn.disabled = false;
+            }
+        });
+        
+        function getErrorMessage(errorCode) {
+            const errorMessages = {
+                'auth/invalid-email': 'Invalid email address',
+                'auth/user-disabled': 'This account has been disabled',
+                'auth/user-not-found': 'No account found with this email',
+                'auth/wrong-password': 'Incorrect password',
+                'auth/too-many-requests': 'Too many failed attempts. Please try again later'
+            };
+            return errorMessages[errorCode] || 'Login failed. Please try again.';
+        }
+        
+        // Redirect if already logged in
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>

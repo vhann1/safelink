@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - SafeLink</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <!-- Add AFTER firebase-config.js -->
+<script src="https://unpkg.com/@capacitor/core/dist/capacitor.js"></script>
+<script src="js/background-tracker.js"></script>
+    <!-- PWA Meta Tags -->
+<meta name="application-name" content="SafeLink">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SafeLink">
+<meta name="description" content="Real-time location tracking and geofencing alerts">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="msapplication-TileColor" content="#3B82F6">
+<meta name="msapplication-tap-highlight" content="no">
+<meta name="theme-color" content="#3B82F6">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Favicon (using emoji as fallback) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+
+<!-- Service Worker Registration -->
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    });
+  }
+</script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card card">
+            <div class="logo">🛡️ SafeLink</div>
+            <div class="logo-subtitle">Create your account</div>
+            
+            <form id="registerForm">
+                <div class="form-group">
+                    <label class="form-label" for="name">Full Name</label>
+                    <input type="text" class="form-input" id="name" placeholder="Enter your full name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="email">Email</label>
+                    <input type="email" class="form-input" id="email" placeholder="Enter your email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" class="form-input" id="password" placeholder="Create a password (min. 6 characters)" minlength="6" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="confirmPassword">Confirm Password</label>
+                    <input type="password" class="form-input" id="confirmPassword" placeholder="Confirm your password" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="userType">I am a:</label>
+                    <select class="form-input" id="userType" required>
+                        <option value="">Select role</option>
+                        <option value="guardian">Guardian (I want to monitor someone)</option>
+                        <option value="tracked">Tracked User (I want to share my location)</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn" id="registerBtn">
+                    <span id="registerText">Create Account</span>
+                    <span id="registerSpinner" class="loading hidden"></span>
+                </button>
+            </form>
+            
+            <div id="message" class="alert hidden" style="margin-top: 1rem;"></div>
+            
+            <div style="margin-top: 2rem; text-align: center;">
+                <p>Already have an account? <a href="login.html" class="link">Login here</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const userType = document.getElementById('userType').value;
+            
+            const registerBtn = document.getElementById('registerBtn');
+            const registerText = document.getElementById('registerText');
+            const registerSpinner = document.getElementById('registerSpinner');
+            const messageDiv = document.getElementById('message');
+            
+            // Validation
+            if (password !== confirmPassword) {
+                showMessage('Passwords do not match', 'error');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showMessage('Password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            if (!userType) {
+                showMessage('Please select your role', 'error');
+                return;
+            }
+            
+            // Show loading state
+            registerText.textContent = 'Creating account...';
+            registerSpinner.classList.remove('hidden');
+            registerBtn.disabled = true;
+            messageDiv.classList.add('hidden');
+            
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Save user profile to Firestore
+                await db.collection('users').doc(user.uid).set({
+                    name: name,
+                    email: email,
+                    userType: userType,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                showMessage('Account created successfully! Redirecting...', 'success');
+                
+                // Redirect after short delay
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                showMessage(getErrorMessage(error.code), 'error');
+            } finally {
+                registerText.textContent = 'Create Account';
+                registerSpinner.classList.add('hidden');
+                registerBtn.disabled = false;
+            }
+        });
+        
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.classList.remove('hidden');
+            
+            if (type === 'error') {
+                messageDiv.style.background = '#fee2e2';
+                messageDiv.style.color = '#991b1b';
+            } else {
+                messageDiv.style.background = '#d1fae5';
+                messageDiv.style.color = '#065f46';
+            }
+        }
+        
+        function getErrorMessage(errorCode) {
+            const errorMessages = {
+                'auth/email-already-in-use': 'This email is already registered',
+                'auth/invalid-email': 'Invalid email address',
+                'auth/operation-not-allowed': 'Operation not allowed',
+                'auth/weak-password': 'Password is too weak'
+            };
+            return errorMessages[errorCode] || 'Registration failed. Please try again.';
+        }
+        
+        // Redirect if already logged in
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>

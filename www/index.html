@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SafeLink</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Leaflet Map Library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="js/firebase-config.js"></script>
+    <script src="https://unpkg.com/@capacitor/core/dist/capacitor.js"></script>
+    <script src="js/background-tracker.js"></script>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="SafeLink">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SafeLink">
+    <meta name="description" content="Real-time location tracking and geofencing alerts">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#3B82F6">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="theme-color" content="#3B82F6">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+
+    <style>
+        #map { height: 400px; border-radius: 0.5rem; }
+        .leaflet-container { font-family: inherit; }
+        .trackee-marker { background: #3B82F6; border: 3px solid white; border-radius: 50%; }
+        .geofence-popup { min-width: 200px; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-shield-alt text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900">SafeLink Dashboard</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-gray-900" id="userName">Loading...</p>
+                        <p class="text-xs text-gray-500" id="userRole">Guardian</p>
+                    </div>
+                    <button onclick="logout()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column - Map and Individual Info -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Real-Time Location Tracking -->
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Real-Time Location Tracking</h2>
+                    
+                    <!-- Interactive Map -->
+                    <div class="bg-white rounded-lg border mb-6">
+                        <div class="flex justify-between items-center p-4 border-b">
+                            <h3 class="font-semibold text-gray-800">Live Tracking Map</h3>
+                            <div class="flex space-x-2">
+                                <button onclick="centerMapOnTrackees()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-crosshairs mr-1"></i>Center Map
+                                </button>
+                                <button onclick="startGeofenceCreation()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-draw-polygon mr-1"></i>Add Geofence
+                                </button>
+                                <button onclick="cancelGeofenceCreation()" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm hidden" id="cancelGeofenceBtn">
+                                    <i class="fas fa-times mr-1"></i>Cancel
+                                </button>
+                            </div>
+                        </div>
+                        <div id="map" class="rounded-b-lg"></div>
+                        <div class="p-3 bg-gray-50 border-t">
+                            <p class="text-sm text-gray-600 text-center" id="mapStatus">
+                                <i class="fas fa-info-circle mr-2"></i>Map loaded - Click "Add Geofence" to create safe zones
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Monitored Individuals -->
+                    <div id="trackeesContainer">
+                        <div class="text-center py-8">
+                            <i class="fas fa-users text-3xl text-gray-300 mb-2"></i>
+                            <p class="text-gray-500">No individuals being monitored</p>
+                            <button onclick="showAddTrackeeModal()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                <i class="fas fa-plus mr-2"></i>Add Trackee
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Alerts and Actions -->
+            <div class="space-y-6">
+                <!-- Alert & Notification Log -->
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Alert Log</h2>
+                        <span class="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded" id="alertsCount">0</span>
+                    </div>
+                    
+                    <div id="alertsList" class="space-y-4 max-h-96 overflow-y-auto">
+                        <div class="text-center py-8">
+                            <i class="fas fa-bell-slash text-2xl text-gray-300 mb-2"></i>
+                            <p class="text-gray-500">No alerts yet</p>
+                        </div>
+                    </div>
+
+                    <button onclick="viewAllAlerts()" class="w-full mt-4 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-history mr-2"></i>View Full Alert History
+                    </button>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-xl shadow-sm border p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
+                    
+                    <div class="grid grid-cols-1 gap-3">
+                        <button onclick="showCreateGeofenceModal()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                            <i class="fas fa-plus-circle mr-2"></i>Create Geofence
+                        </button>
+                        
+                        <button onclick="manageGeofences()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                            <i class="fas fa-edit mr-2"></i>Manage Geofences
+                        </button>
+                        
+                        <button onclick="viewHistory()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                            <i class="fas fa-chart-bar mr-2"></i>View History
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <!-- Active Geofences -->
+            <div class="bg-white rounded-xl shadow-sm border p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">Active Geofences</h3>
+                    <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded" id="geofencesCount">0</span>
+                </div>
+                <div id="geofencesList">
+                    <p class="text-gray-500 text-sm">No geofences created yet</p>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="bg-white rounded-xl shadow-sm border p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-heartbeat text-green-500 text-xl mr-3"></i>
+                    <h3 class="text-lg font-bold text-gray-800">System Status</h3>
+                </div>
+                <div id="systemStatus" class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Active Trackees</span>
+                        <span class="bg-gray-100 text-gray-800 text-xs font-semibold px-2 py-1 rounded" id="activeTrackeesCount">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Location Updates</span>
+                        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded" id="updatesStatus">Live</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Alert System</span>
+                        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded">Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Trackee Modal -->
+    <div id="addTrackeeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Add Trackee</h3>
+            <form id="addTrackeeForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Trackee Name</label>
+                        <input type="text" id="trackeeName" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter trackee name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Trackee Email</label>
+                        <input type="email" id="trackeeEmail" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter trackee email">
+                    </div>
+                </div>
+                <div class="flex space-x-3 mt-6">
+                    <button type="button" onclick="hideAddTrackeeModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition-colors">
+                        Add Trackee
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Geofence Modal -->
+    <div id="createGeofenceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Create Geofence</h3>
+            <form id="createGeofenceForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Geofence Name</label>
+                        <input type="text" id="geofenceName" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter geofence name">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Latitude</label>
+                            <input type="number" id="geofenceLat" required step="any"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="40.7128">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Longitude</label>
+                            <input type="number" id="geofenceLng" required step="any"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="-74.0060">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Radius (meters)</label>
+                        <input type="number" id="geofenceRadius" required min="50" max="5000" value="500"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="500">
+                    </div>
+                </div>
+                <div class="flex space-x-3 mt-6">
+                    <button type="button" onclick="hideCreateGeofenceModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition-colors">
+                        Create Geofence
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let trackees = [];
+        let alerts = [];
+        let geofences = [];
+        let map = null;
+        let trackeeMarkers = {};
+        let geofenceCircles = {};
+        let isCreatingGeofence = false;
+        let tempGeofenceCircle = null;
+
+        // Authentication state
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                if (typeof backgroundTracker !== 'undefined') {
+                    backgroundTracker.setUser(user);
+                }
+                await loadUserData(user);
+                initMap();
+                startRealtimeListeners();
+                
+                // Start background tracking if user is a trackee
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists && userDoc.data().userType === 'tracked_user') {
+                    if (typeof backgroundTracker !== 'undefined') {
+                        backgroundTracker.startTracking();
+                    }
+                }
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        // Initialize the map
+        function initMap() {
+            // Create map centered on default location
+            map = L.map('map').setView([40.7128, -74.0060], 13);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Add click event for geofence creation
+            map.on('click', function(e) {
+                if (isCreatingGeofence) {
+                    createGeofenceAtLocation(e.latlng.lat, e.latlng.lng);
+                }
+            });
+            
+            console.log('Map initialized');
+        }
+
+        async function loadUserData(user) {
+            try {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    document.getElementById('userName').textContent = userData.name || 'User';
+                    document.getElementById('userRole').textContent = userData.userType === 'guardian' ? 'Guardian' : 'Trackee';
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        function startRealtimeListeners() {
+            // Listen for trackees (people this user is monitoring)
+            db.collection('guardians_trackees')
+                .where('guardianId', '==', currentUser.uid)
+                .onSnapshot(async (snapshot) => {
+                    trackees = [];
+                    const trackeePromises = [];
+                    
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        trackeePromises.push(
+                            db.collection('users').doc(data.trackeeId).get()
+                        );
+                    });
+                    
+                    const trackeeSnapshots = await Promise.all(trackeePromises);
+                    trackeeSnapshots.forEach(trackeeDoc => {
+                        if (trackeeDoc.exists) {
+                            trackees.push({ id: trackeeDoc.id, ...trackeeDoc.data() });
+                        }
+                    });
+                    
+                    updateTrackeesDisplay();
+                    updateSystemStatus();
+                    loadTrackeeLocations();
+                });
+            
+            // Listen for alerts
+            db.collection('alerts')
+                .where('guardianId', '==', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .limit(10)
+                .onSnapshot((snapshot) => {
+                    alerts = [];
+                    snapshot.forEach(doc => {
+                        alerts.push({ id: doc.id, ...doc.data() });
+                    });
+                    updateAlertsDisplay();
+                });
+            
+            // Listen for geofences
+            db.collection('geofences')
+                .where('userId', '==', currentUser.uid)
+                .onSnapshot((snapshot) => {
+                    geofences = [];
+                    snapshot.forEach(doc => {
+                        geofences.push({ id: doc.id, ...doc.data() });
+                    });
+                    updateGeofencesDisplay();
+                    updateMapWithGeofences();
+                });
+        }
+
+        async function loadTrackeeLocations() {
+            for (const trackee of trackees) {
+                try {
+                    const locationSnapshot = await db.collection('locations')
+                        .where('userId', '==', trackee.id)
+                        .orderBy('timestamp', 'desc')
+                        .limit(1)
+                        .get();
+                    
+                    if (!locationSnapshot.empty) {
+                        const location = locationSnapshot.docs[0].data();
+                        trackee.latestLocation = {
+                            ...location,
+                            timestamp: location.timestamp?.toDate() || new Date()
+                        };
+                        updateTrackeeOnMap(trackee);
+                    }
+                } catch (error) {
+                    console.error('Error loading location for trackee:', trackee.id, error);
+                }
+            }
+            updateTrackeesDisplay();
+        }
+
+        function updateTrackeeOnMap(trackee) {
+            const location = trackee.latestLocation;
+            if (!location || !location.latitude || !location.longitude) return;
+
+            // Remove existing marker
+            if (trackeeMarkers[trackee.id]) {
+                map.removeLayer(trackeeMarkers[trackee.id]);
+            }
+
+            // Create new marker
+            const isInSafeZone = location.inSafeZone !== false;
+            const markerColor = isInSafeZone ? '#10B981' : '#EF4444';
+            
+            const marker = L.circleMarker([location.latitude, location.longitude], {
+                color: markerColor,
+                fillColor: markerColor,
+                fillOpacity: 0.7,
+                radius: 8,
+                weight: 2
+            }).addTo(map);
+
+            // Add popup
+            marker.bindPopup(`
+                <div class="geofence-popup">
+                    <h3 class="font-bold text-lg">${trackee.name}</h3>
+                    <p class="text-sm ${isInSafeZone ? 'text-green-600' : 'text-red-600'} font-semibold">
+                        ${isInSafeZone ? '🟢 IN SAFE ZONE' : '🔴 OUTSIDE SAFE ZONE'}
+                    </p>
+                    <p class="text-xs text-gray-600 mt-1">
+                        Accuracy: ${location.accuracy || 'N/A'}m<br>
+                        Battery: ${location.battery || 'N/A'}%<br>
+                        Last: ${formatTimeAgo(location.timestamp)}
+                    </p>
+                </div>
+            `);
+
+            trackeeMarkers[trackee.id] = marker;
+        }
+
+        function updateTrackeesDisplay() {
+            const container = document.getElementById('trackeesContainer');
+            const trackeeCount = document.getElementById('trackeeCount');
+            
+            if (trackees.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-users text-3xl text-gray-300 mb-2"></i>
+                        <p class="text-gray-500">No individuals being monitored</p>
+                        <button onclick="showAddTrackeeModal()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            <i class="fas fa-plus mr-2"></i>Add Trackee
+                        </button>
+                    </div>
+                `;
+                trackeeCount.textContent = '0';
+                return;
+            }
+            
+            let html = '<div class="space-y-4">';
+            trackees.forEach(trackee => {
+                const latestLocation = trackee.latestLocation || {};
+                const isInSafeZone = latestLocation.inSafeZone !== false;
+                
+                html += `
+                    <div class="bg-${isInSafeZone ? 'green' : 'red'}-50 border border-${isInSafeZone ? 'green' : 'red'}-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="font-semibold text-gray-800 text-lg">${trackee.name}</h3>
+                                    <span class="bg-${isInSafeZone ? 'green' : 'red'}-100 text-${isInSafeZone ? 'green' : 'red'}-800 text-xs font-semibold px-2 py-1 rounded uppercase">
+                                        ${isInSafeZone ? 'SAFE' : 'ALERT'}
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-map-marker-alt text-gray-500 mr-2"></i>
+                                        <span class="text-gray-700">
+                                            ${latestLocation.latitude ? `${latestLocation.latitude.toFixed(4)}, ${latestLocation.longitude.toFixed(4)}` : 'No location'}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-battery-${getBatteryIcon(latestLocation.battery)} text-gray-500 mr-2"></i>
+                                        <span class="text-gray-700">${latestLocation.battery || 'N/A'}%</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-bullseye text-gray-500 mr-2"></i>
+                                        <span class="text-gray-700">Accuracy: ${latestLocation.accuracy || 'N/A'}m</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-clock text-gray-500 mr-2"></i>
+                                        <span class="text-gray-700">${formatTimeAgo(latestLocation.timestamp)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            trackeeCount.textContent = trackees.length;
+        }
+
+        function updateAlertsDisplay() {
+            const container = document.getElementById('alertsList');
+            const countElement = document.getElementById('alertsCount');
+            
+            countElement.textContent = alerts.length;
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-bell-slash text-2xl text-gray-300 mb-2"></i>
+                        <p class="text-gray-500">No alerts yet</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="space-y-3">';
+            alerts.forEach(alert => {
+                const alertType = alert.alertType || 'info';
+                const alertConfig = {
+                    'exit': { color: 'red', icon: 'exclamation-triangle', label: 'EXIT ALERT' },
+                    'entry': { color: 'green', icon: 'sign-in-alt', label: 'ENTRY ALERT' },
+                    'battery': { color: 'yellow', icon: 'battery-quarter', label: 'LOW BATTERY' }
+                }[alertType] || { color: 'blue', icon: 'info-circle', label: 'ALERT' };
+                
+                html += `
+                    <div class="border-l-4 border-${alertConfig.color}-500 bg-${alertConfig.color}-50 p-4 rounded-r-lg">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="inline-block bg-${alertConfig.color}-100 text-${alertConfig.color}-800 text-xs font-semibold px-2 py-1 rounded uppercase">
+                                        ${alertConfig.label}
+                                    </span>
+                                    <i class="fas fa-${alertConfig.icon} text-${alertConfig.color}-500"></i>
+                                </div>
+                                <p class="text-sm text-gray-700 font-medium">${alert.message}</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-user mr-1"></i>${alert.trackeeName || 'System'}
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-clock mr-1"></i>${formatTime(alert.createdAt?.toDate())}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+
+        function updateGeofencesDisplay() {
+            const container = document.getElementById('geofencesList');
+            const countElement = document.getElementById('geofencesCount');
+            
+            countElement.textContent = geofences.length;
+            
+            if (geofences.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No geofences created yet</p>';
+                return;
+            }
+            
+            let html = '<div class="space-y-2">';
+            geofences.forEach(geofence => {
+                const isActive = geofence.isActive !== false;
+                html += `
+                    <div class="flex justify-between items-center p-3 bg-${isActive ? 'green' : 'gray'}-50 rounded-lg border">
+                        <div>
+                            <span class="text-sm font-medium text-gray-800">${geofence.name}</span>
+                            <div class="flex items-center mt-1 space-x-3 text-xs text-gray-600">
+                                <span><i class="fas fa-crosshairs mr-1"></i>${geofence.radius || geofence.radius_metres || 500}m radius</span>
+                                <span><i class="fas fa-map-pin mr-1"></i>${geofence.latitude?.toFixed(4)}, ${geofence.longitude?.toFixed(4)}</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="toggleGeofence('${geofence.id}', ${!isActive})" 
+                                    class="text-xs px-2 py-1 rounded ${isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
+                                ${isActive ? 'Disable' : 'Enable'}
+                            </button>
+                            <button onclick="deleteGeofence('${geofence.id}')" 
+                                    class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+
+        function updateMapWithGeofences() {
+            // Clear existing geofence circles
+            Object.values(geofenceCircles).forEach(circle => {
+                map.removeLayer(circle);
+            });
+            geofenceCircles = {};
+
+            // Add geofences to map
+            geofences.forEach(geofence => {
+                if (geofence.latitude && geofence.longitude) {
+                    const isActive = geofence.isActive !== false;
+                    const circle = L.circle([geofence.latitude, geofence.longitude], {
+                        color: isActive ? '#3B82F6' : '#6B7280',
+                        fillColor: isActive ? '#3B82F6' : '#6B7280',
+                        fillOpacity: 0.1,
+                        radius: geofence.radius || geofence.radius_metres || 500
+                    }).addTo(map);
+
+                    circle.bindPopup(`
+                        <div class="geofence-popup">
+                            <h3 class="font-bold text-lg">${geofence.name}</h3>
+                            <p class="text-sm ${isActive ? 'text-blue-600' : 'text-gray-600'}">
+                                ${isActive ? '🟢 ACTIVE' : '⚪ INACTIVE'}
+                            </p>
+                            <p class="text-xs text-gray-600 mt-1">
+                                Radius: ${geofence.radius || geofence.radius_metres || 500}m<br>
+                                Created: ${formatTime(geofence.createdAt?.toDate())}
+                            </p>
+                            <div class="mt-2 space-x-2">
+                                <button onclick="toggleGeofence('${geofence.id}', ${!isActive})" 
+                                        class="text-xs px-2 py-1 rounded ${isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
+                                    ${isActive ? 'Disable' : 'Enable'}
+                                </button>
+                                <button onclick="deleteGeofence('${geofence.id}')" 
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    `);
+
+                    geofenceCircles[geofence.id] = circle;
+                }
+            });
+        }
+
+        function updateSystemStatus() {
+            document.getElementById('activeTrackeesCount').textContent = trackees.length;
+            document.getElementById('updatesStatus').textContent = trackees.length > 0 ? 'Live' : 'Waiting';
+        }
+
+        // Map Functions
+        function centerMapOnTrackees() {
+            if (trackees.length === 0) {
+                alert('No trackees to center on');
+                return;
+            }
+
+            const group = new L.featureGroup();
+            Object.values(trackeeMarkers).forEach(marker => {
+                group.addLayer(marker);
+            });
+            Object.values(geofenceCircles).forEach(circle => {
+                group.addLayer(circle);
+            });
+
+            if (group.getLayers().length > 0) {
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        function startGeofenceCreation() {
+            isCreatingGeofence = true;
+            document.getElementById('cancelGeofenceBtn').classList.remove('hidden');
+            document.getElementById('mapStatus').innerHTML = '<i class="fas fa-mouse-pointer mr-2"></i>Click on the map to place a geofence';
+            
+            // Change cursor to indicate drawing mode
+            map.getContainer().style.cursor = 'crosshair';
+        }
+
+        function cancelGeofenceCreation() {
+            isCreatingGeofence = false;
+            document.getElementById('cancelGeofenceBtn').classList.add('hidden');
+            document.getElementById('mapStatus').innerHTML = '<i class="fas fa-info-circle mr-2"></i>Map loaded - Click "Add Geofence" to create safe zones';
+            
+            // Reset cursor
+            map.getContainer().style.cursor = '';
+            
+            // Remove temporary circle if exists
+            if (tempGeofenceCircle) {
+                map.removeLayer(tempGeofenceCircle);
+                tempGeofenceCircle = null;
+            }
+        }
+
+        function createGeofenceAtLocation(lat, lng) {
+            // Remove temporary circle if exists
+            if (tempGeofenceCircle) {
+                map.removeLayer(tempGeofenceCircle);
+            }
+
+            // Create temporary circle for visualization
+            tempGeofenceCircle = L.circle([lat, lng], {
+                color: '#3B82F6',
+                fillColor: '#3B82F6',
+                fillOpacity: 0.2,
+                radius: 500
+            }).addTo(map);
+
+            // Show creation modal
+            showCreateGeofenceModal(lat, lng);
+        }
+
+        // Modal functions
+        function showAddTrackeeModal() {
+            document.getElementById('addTrackeeModal').classList.remove('hidden');
+        }
+
+        function hideAddTrackeeModal() {
+            document.getElementById('addTrackeeModal').classList.add('hidden');
+        }
+
+        function showCreateGeofenceModal(lat = null, lng = null) {
+            if (lat && lng) {
+                document.getElementById('geofenceLat').value = lat.toFixed(6);
+                document.getElementById('geofenceLng').value = lng.toFixed(6);
+            }
+            document.getElementById('createGeofenceModal').classList.remove('hidden');
+            cancelGeofenceCreation();
+        }
+
+        function hideCreateGeofenceModal() {
+            document.getElementById('createGeofenceModal').classList.add('hidden');
+            document.getElementById('createGeofenceForm').reset();
+            
+            // Remove temporary circle
+            if (tempGeofenceCircle) {
+                map.removeLayer(tempGeofenceCircle);
+                tempGeofenceCircle = null;
+            }
+        }
+
+        // Form handlers
+        document.getElementById('addTrackeeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const trackeeName = document.getElementById('trackeeName').value;
+            const trackeeEmail = document.getElementById('trackeeEmail').value;
+            
+            try {
+                // First, check if user exists
+                const userQuery = await db.collection('users')
+                    .where('email', '==', trackeeEmail)
+                    .where('userType', '==', 'tracked_user')
+                    .get();
+                
+                if (userQuery.empty) {
+                    alert('No trackee found with that email. They need to register first as a "Tracked User".');
+                    return;
+                }
+                
+                const trackeeDoc = userQuery.docs[0];
+                
+                // Check if already added
+                const existingRelation = await db.collection('guardians_trackees')
+                    .where('guardianId', '==', currentUser.uid)
+                    .where('trackeeId', '==', trackeeDoc.id)
+                    .get();
+                    
+                if (!existingRelation.empty) {
+                    alert('This trackee is already in your monitoring list.');
+                    return;
+                }
+                
+                // Add to guardians_trackees
+                await db.collection('guardians_trackees').add({
+                    guardianId: currentUser.uid,
+                    trackeeId: trackeeDoc.id,
+                    trackeeName: trackeeName,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                hideAddTrackeeModal();
+                document.getElementById('addTrackeeForm').reset();
+                alert('Trackee added successfully!');
+                
+            } catch (error) {
+                console.error('Error adding trackee:', error);
+                alert('Error adding trackee: ' + error.message);
+            }
+        });
+
+        document.getElementById('createGeofenceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('geofenceName').value;
+            const lat = parseFloat(document.getElementById('geofenceLat').value);
+            const lng = parseFloat(document.getElementById('geofenceLng').value);
+            const radius = parseInt(document.getElementById('geofenceRadius').value);
+            
+            try {
+                await db.collection('geofences').add({
+                    name: name,
+                    latitude: lat,
+                    longitude: lng,
+                    radius: radius,
+                    userId: currentUser.uid,
+                    isActive: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                hideCreateGeofenceModal();
+                alert('Geofence created successfully!');
+                
+            } catch (error) {
+                console.error('Error creating geofence:', error);
+                alert('Error creating geofence: ' + error.message);
+            }
+        });
+
+        // Geofence Management
+        async function toggleGeofence(geofenceId, isActive) {
+            try {
+                await db.collection('geofences').doc(geofenceId).update({
+                    isActive: isActive
+                });
+            } catch (error) {
+                console.error('Error toggling geofence:', error);
+                alert('Error updating geofence: ' + error.message);
+            }
+        }
+
+        async function deleteGeofence(geofenceId) {
+            if (confirm('Are you sure you want to delete this geofence?')) {
+                try {
+                    await db.collection('geofences').doc(geofenceId).delete();
+                alert('Geofence deleted successfully!');
+                } catch (error) {
+                    console.error('Error deleting geofence:', error);
+                    alert('Error deleting geofence: ' + error.message);
+                }
+            }
+        }
+
+        // Action Functions (Now Functional)
+        function showCreateGeofenceModal() {
+            startGeofenceCreation();
+        }
+
+        function manageGeofences() {
+            const geofenceList = geofences.map(g => 
+                `• ${g.name} (${g.radius || g.radius_metres || 500}m) - ${g.isActive ? 'ACTIVE' : 'INACTIVE'}\n`
+            ).join('');
+            
+            if (geofenceList) {
+                alert(`Your Geofences:\n\n${geofenceList}\n\nClick on geofences on the map to manage them.`);
+            } else {
+                alert('No geofences created yet. Click "Add Geofence" to create your first safe zone.');
+            }
+        }
+
+        function viewHistory() {
+            const historyInfo = trackees.map(trackee => {
+                const location = trackee.latestLocation;
+                return `${trackee.name}: ${location ? `${formatTimeAgo(location.timestamp)} at ${location.latitude?.toFixed(4)}, ${location.longitude?.toFixed(4)}` : 'No data'}`;
+            }).join('\n');
+            
+            alert(`Location History:\n\n${historyInfo || 'No history available'}`);
+        }
+
+        function viewAllAlerts() {
+            const allAlerts = alerts.map(alert => 
+                `[${formatTime(alert.createdAt?.toDate())}] ${alert.trackeeName || 'System'}: ${alert.message}`
+            ).join('\n');
+            
+            alert(`Full Alert History:\n\n${allAlerts || 'No alerts'}`);
+        }
+
+        // Utility functions
+        function getBatteryIcon(level) {
+            if (!level) return 'question';
+            if (level > 75) return 'full';
+            if (level > 50) return 'three-quarters';
+            if (level > 25) return 'half';
+            if (level > 10) return 'quarter';
+            return 'empty';
+        }
+
+        function formatTimeAgo(timestamp) {
+            if (!timestamp) return 'Never';
+            const diff = (Date.now() - timestamp.getTime()) / 1000;
+            if (diff < 60) return Math.floor(diff) + 's ago';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+        }
+
+        function formatTime(date) {
+            if (!date) return 'Unknown';
+            return date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
+        }
+
+        function logout() {
+            if (typeof backgroundTracker !== 'undefined') {
+                backgroundTracker.stopTracking();
+            }
+            auth.signOut();
+        }
+
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

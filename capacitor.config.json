@@ -1,0 +1,30 @@
+{
+  "appId": "com.safelink.app",
+  "appName": "SafeLink",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BackgroundGeolocation": {
+      "locationProvider": 1,
+      "desiredAccuracy": 0,
+      "interval": 30000,
+      "fastestInterval": 5000,
+      "activitiesInterval": 10000,
+      "notificationTitle": "SafeLink Tracking",
+      "notificationText": "Location tracking active",
+      "stopOnTerminate": false,
+      "startOnBoot": true,
+      "startForeground": true,
+      "notificationIconColor": "#3B82F6"
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    }
+  }
+}

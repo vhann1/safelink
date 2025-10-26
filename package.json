@@ -1,0 +1,22 @@
+{
+  "name": "safelink",
+  "version": "1.0.0",
+  "description": "",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/push-notifications": "^7.0.3",
+    "cordova-plugin-background-geolocation": "^1.0.6",
+    "cordova-plugin-dialogs": "^2.0.2",
+    "cordova-plugin-geolocation": "^5.0.0"
+  }
+}
