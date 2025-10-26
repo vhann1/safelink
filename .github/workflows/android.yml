@@ -13,13 +13,13 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'  # ✅ Updated for Android Gradle Plugin compatibility
           distribution: 'temurin'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # ✅ Updated for Capacitor compatibility
+          node-version: '20'  # ✅ Capacitor v6+ requires Node 20+
 
       - name: Install dependencies
         run: npm install
