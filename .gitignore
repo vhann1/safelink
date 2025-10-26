@@ -1,25 +1,69 @@
 # Dependencies
 node_modules/
 www/node_modules/
+jspm_packages/
+web_modules/
 
 # Build outputs
 android/
 ios/
 dist/
 build/
+build/Release
 
 # Environment variables
 .env
 .env.local
+.env.*
+!.env.example
 
 # Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
-# IDE files
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage / Test
+coverage/
+*.lcov
+.nyc_output
+lib-cov
+.grunt
+
+# Cache directories
+.cache/
+.parcel-cache/
+.vuepress/dist/
+.temp/
+.svelte-kit/
+.serverless/
+.firebase/
+.docusaurus/
+.npm/
+.eslintcache
+.stylelintcache
+.yarn-integrity
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE / Editor
 .vscode/
 .idea/
+.vscode-test/
 *.swp
 *.swo
 
@@ -31,3 +75,17 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Optional REPL and config files
+.node_repl_history
+.lock-wscript
+.tern-port
+
+# Yarn v3
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
