@@ -25,7 +25,7 @@ jobs:
         run: npm install
 
       - name: Sync Capacitor
-           run: node ./node_modules/@capacitor/cli/bin/capacitor sync
+        run: node ./node_modules/@capacitor/cli/bin/capacitor sync
 
 
       - name: Debug directory
